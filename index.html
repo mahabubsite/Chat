@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Chat</title>
+    <!-- Tailwind CSS CDN for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Use Inter font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f3f4f6;
+        }
+        /* Custom scrollbar for chat messages and user lists */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #e5e7eb;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+        }
+        .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #9ca3af #e5e7eb;
+        }
+        .message-sent {
+            background-color: #dbeafe; /* light blue */
+        }
+        .message-received {
+            background-color: #e5e7eb; /* light gray */
+        }
+        .view-transition {
+            transition: opacity 0.5s ease;
+        }
+        @keyframes fade-in-out {
+            0% { opacity: 0; transform: translateY(20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(20px); }
+        }
+        .animate-fade-in-out {
+            animation: fade-in-out 3s forwards;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+    <!-- Main Container -->
+    <div id="app-container" class="bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-7xl h-[90vh] flex flex-row relative">
+
+        <!-- Splash Screen / Login Prompt -->
+        <div id="splash-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 bg-white z-20 view-transition">
+            <h1 class="text-4xl font-bold text-gray-800 mb-6">Welcome to ChatSphere</h1>
+            <p class="text-center text-gray-600 mb-8">Click below to get started and connect with friends.</p>
+            <button id="get-started-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                Get Started
+            </button>
+        </div>
+
+        <!-- Authentication View (Sign In/Sign Up) -->
+        <div id="auth-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 bg-white z-10 hidden view-transition">
+            <h1 id="auth-title" class="text-3xl font-bold text-gray-800 mb-6">Sign In</h1>
+            <form id="auth-form" class="w-full max-w-sm space-y-4">
+                <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 rounded-xl bg-gray-100 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200" required>
+                <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 rounded-xl bg-gray-100 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200" required>
+                <button id="auth-submit-btn" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105">
+                    Sign In
+                </button>
+            </form>
+            <button id="toggle-auth-btn" class="mt-4 text-indigo-600 hover:underline">
+                New user? Sign Up
+            </button>
+        </div>
+        
+        <!-- Main Chat App View -->
+        <div id="main-app-view" class="hidden w-full h-full flex view-transition">
+            <!-- Left Sidebar: Friends list, Search, and Profile -->
+            <div id="sidebar" class="w-1/3 bg-gray-50 border-r border-gray-200 flex flex-col p-6 rounded-l-3xl">
+                <!-- Title -->
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">ChatSphere</h2>
+                </div>
+
+                <!-- Search Users Section -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Search Users</h3>
+                    <div class="relative">
+                        <input id="search-input" type="text" placeholder="Search by user ID..." class="w-full p-3 pl-10 rounded-xl bg-gray-100 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <div id="search-results" class="mt-2 space-y-2 custom-scrollbar max-h-40 overflow-y-auto">
+                        <!-- Search results will be dynamically added here -->
+                    </div>
+                </div>
+                
+                <!-- Friend Requests Section -->
+                <div id="friend-requests-section" class="mb-6 hidden">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Friend Requests <span id="request-count" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2">0</span></h3>
+                    <div id="friend-requests-list" class="space-y-2 custom-scrollbar max-h-40 overflow-y-auto">
+                        <!-- Friend requests will be dynamically added here -->
+                    </div>
+                </div>
+
+                <!-- Friends List Section -->
+                <div class="flex-grow flex flex-col">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">My Friends</h3>
+                    <div id="friends-list" class="flex-grow overflow-y-auto custom-scrollbar space-y-2">
+                        <!-- Friends will be dynamically added here -->
+                    </div>
+                </div>
+
+                <!-- Profile and Sign Out Section -->
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <!-- User Profile Info -->
+                    <div id="profile-info" class="flex items-center space-x-2 mb-4 group">
+                        <div class="relative">
+                            <img id="profile-pic" class="w-10 h-10 rounded-full border-2 border-transparent group-hover:border-indigo-500 transition-all duration-200 cursor-pointer" src="https://placehold.co/100x100/e2e8f0/64748b?text=P" alt="Profile Picture">
+                            <input type="file" id="profile-pic-input" class="hidden" accept="image/*">
+                            <div class="loader hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2">
+                                <span id="user-name" class="text-lg font-semibold text-gray-800"></span>
+                                <button id="edit-name-btn" class="p-1 text-gray-500 hover:text-indigo-600 transition-colors duration-200" title="Edit Name">
+                                    <i class="fas fa-edit text-sm"></i>
+                                </button>
+                            </div>
+                            <p id="user-uid" class="text-xs text-gray-500 break-all"></p>
+                        </div>
+                    </div>
+                    <!-- Sign Out Button -->
+                    <button id="sign-out-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-full shadow transition-all duration-300">
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Chat Window -->
+            <div id="chat-window" class="w-2/3 flex flex-col p-6 rounded-r-3xl">
+                <!-- Chat Header -->
+                <div id="chat-header" class="flex items-center space-x-4 pb-4 border-b border-gray-200">
+                    <img id="friend-profile-pic" class="w-12 h-12 rounded-full border-2 border-transparent" src="https://placehold.co/100x100/cbd5e1/475569?text=C" alt="Friend Profile Picture">
+                    <div class="flex-1">
+                        <h3 id="friend-name" class="text-lg font-bold text-gray-800">Select a Friend</h3>
+                        <p id="friend-status" class="text-sm text-gray-500">Offline</p>
+                    </div>
+                    <button id="remove-friend-btn" class="hidden p-2 text-red-500 hover:text-red-700 transition-colors duration-200" title="Remove Friend">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+
+                <!-- Chat Messages Area -->
+                <div id="chat-messages" class="chat-messages flex-grow custom-scrollbar py-4 space-y-4">
+                    <!-- Messages will be dynamically added here -->
+                </div>
+
+                <!-- Message Input Form -->
+                <form id="message-form" class="mt-4 flex items-center space-x-4">
+                    <!-- Image and poll attachment buttons -->
+                    <label for="image-input" class="cursor-pointer text-gray-500 hover:text-indigo-600 transition-colors">
+                        <i class="fas fa-image fa-lg"></i>
+                    </label>
+                    <input type="file" id="image-input" class="hidden" accept="image/*">
+                    
+                    <input id="message-input" type="text" placeholder="Type a message..." class="flex-grow p-4 rounded-full bg-gray-100 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+                    <button id="send-btn" type="submit" class="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for showing messages/errors instead of alert() -->
+    <div id="message-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm text-center">
+            <p id="modal-text" class="text-gray-800"></p>
+            <button id="modal-close-btn" class="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700">OK</button>
+        </div>
+    </div>
+
+    <!-- Modal for Name Change -->
+    <div id="name-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Change Your Name</h2>
+            <form id="name-form" class="space-y-4">
+                <input id="new-name-input" type="text" placeholder="Enter new name" class="w-full p-3 rounded-xl bg-gray-100 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200" required>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="name-modal-cancel-btn" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import necessary Firebase services
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDocs, collection, query, where, addDoc, onSnapshot, updateDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+        // IMPORTANT: Global variables provided by the environment for Firebase setup
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Using the user-provided Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTxuMKeyPQs6NmYmYRPQGojWckH2USKC0",
+            authDomain: "chatapp-3160a.firebaseapp.com",
+            projectId: "chatapp-3160a",
+            storageBucket: "chatapp-3160a.firebasestorage.app",
+            messagingSenderId: "534670200081",
+            appId: "1:534670200081:web:80454b967727b0bd5c10b0"
+        };
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- 1. INITIALIZE FIREBASE AND AUTHENTICATION ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // UI element references
+        const splashView = document.getElementById('splash-view');
+        const getStartedBtn = document.getElementById('get-started-btn');
+        const authView = document.getElementById('auth-view');
+        const mainAppView = document.getElementById('main-app-view');
+        const authForm = document.getElementById('auth-form');
+        const authTitle = document.getElementById('auth-title');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const toggleAuthBtn = document.getElementById('toggle-auth-btn');
+        const authEmailInput = document.getElementById('auth-email');
+        const authPasswordInput = document.getElementById('auth-password');
+        const signOutBtn = document.getElementById('sign-out-btn');
+        const friendsListEl = document.getElementById('friends-list');
+        const chatMessagesEl = document.getElementById('chat-messages');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const profileNameEl = document.getElementById('user-name');
+        const profileUidEl = document.getElementById('user-uid');
+        const profilePicEl = document.getElementById('profile-pic');
+        const profilePicInput = document.getElementById('profile-pic-input');
+        const profilePicLoader = document.querySelector('#profile-info .loader');
+        const friendNameEl = document.getElementById('friend-name');
+        const friendStatusEl = document.getElementById('friend-status');
+        const removeFriendBtn = document.getElementById('remove-friend-btn');
+        const searchInput = document.getElementById('search-input');
+        const searchResultsEl = document.getElementById('search-results');
+        const messageModal = document.getElementById('message-modal');
+        const modalText = document.getElementById('modal-text');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const nameModal = document.getElementById('name-modal');
+        const nameForm = document.getElementById('name-form');
+        const newNameInput = document.getElementById('new-name-input');
+        const editNameBtn = document.getElementById('edit-name-btn');
+        const nameModalCancelBtn = document.getElementById('name-modal-cancel-btn');
+        const imageInput = document.getElementById('image-input');
+        const friendRequestsSection = document.getElementById('friend-requests-section');
+        const friendRequestsList = document.getElementById('friend-requests-list');
+        const requestCountEl = document.getElementById('request-count');
+
+
+        let isSigningUp = false;
+        let currentUser = null;
+        let currentFriend = null;
+        let unsubscribeFromChat = null;
+        let unsubscribeFromFriends = null;
+        let unsubscribeFromRequests = null;
+
+        // --- 2. CORE FUNCTIONS ---
+
+        function showView(viewId) {
+            const views = [splashView, authView, mainAppView];
+            views.forEach(view => {
+                if (view.id === viewId) {
+                    view.classList.remove('hidden');
+                    view.style.opacity = '1';
+                    view.style.pointerEvents = 'auto';
+                } else {
+                    view.classList.add('hidden');
+                    view.style.opacity = '0';
+                    view.style.pointerEvents = 'none';
+                }
+            });
+        }
+
+        function showMessageModal(message) {
+            modalText.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+
+        async function ensureUserDocExists(user) {
+            const userRef = doc(db, "artifacts", appId, "public", "data", "users", user.uid);
+            await setDoc(userRef, {
+                uid: user.uid,
+                name: user.displayName || (user.email ? user.email.split('@')[0] : user.uid),
+                email: user.email,
+                photoURL: user.photoURL || null,
+                lastSeen: new Date(),
+            }, { merge: true });
+        }
+
+        async function searchUsers(queryText) {
+            searchResultsEl.innerHTML = '';
+            if (queryText.length < 3) return;
+
+            const usersRef = collection(db, "artifacts", appId, "public", "data", "users");
+            const q = query(usersRef);
+
+            const querySnapshot = await getDocs(q);
+            const results = [];
+            querySnapshot.forEach(doc => {
+                const userData = doc.data();
+                if (userData.uid !== currentUser.uid && (userData.name.toLowerCase().includes(queryText.toLowerCase()) || userData.uid.toLowerCase().includes(queryText.toLowerCase()))) {
+                    results.push(userData);
+                }
+            });
+            
+            if (results.length === 0) {
+                searchResultsEl.innerHTML = '<p class="text-sm text-gray-500">No users found.</p>';
+                return;
+            }
+
+            results.forEach(user => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'flex items-center justify-between p-2 rounded-lg bg-gray-100';
+                resultItem.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <img src="${user.photoURL || `https://placehold.co/100x100/cbd5e1/475569?text=${user.name.charAt(0)}`}" alt="Profile" class="w-8 h-8 rounded-full">
+                        <span class="text-sm font-semibold text-gray-800">${user.name}</span>
+                    </div>
+                    <button class="add-friend-btn bg-indigo-500 text-white text-xs px-3 py-1 rounded-full hover:bg-indigo-600 transition-colors duration-200" data-uid="${user.uid}" data-name="${user.name}">Add</button>
+                `;
+                searchResultsEl.appendChild(resultItem);
+            });
+        }
+
+        function startFriendRequestsListener() {
+            if (!currentUser) return;
+            const requestsRef = collection(db, "artifacts", appId, "public", "data", "friend_requests");
+            const q = query(requestsRef, where("receiverId", "==", currentUser.uid));
+
+            if (unsubscribeFromRequests) {
+                unsubscribeFromRequests();
+            }
+
+            unsubscribeFromRequests = onSnapshot(q, (snapshot) => {
+                friendRequestsList.innerHTML = '';
+                const requests = [];
+                snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+
+                if (requests.length > 0) {
+                    friendRequestsSection.classList.remove('hidden');
+                    requestCountEl.textContent = requests.length;
+                    requests.forEach(req => renderFriendRequest(req));
+                } else {
+                    friendRequestsSection.classList.add('hidden');
+                }
+            }, (error) => {
+                console.error("Error listening to friend requests:", error);
+            });
+        }
+
+        async function sendFriendRequest(receiverId, receiverName) {
+            try {
+                const requestsRef = collection(db, "artifacts", appId, "public", "data", "friend_requests");
+                await addDoc(requestsRef, {
+                    senderId: currentUser.uid,
+                    senderName: currentUser.displayName,
+                    receiverId: receiverId,
+                    receiverName: receiverName,
+                    status: 'pending',
+                    timestamp: new Date()
+                });
+                showMessageModal(`Friend request sent to ${receiverName}!`);
+            } catch (error) {
+                console.error("Error sending friend request:", error);
+                showMessageModal("Failed to send friend request. Please try again.");
+            }
+        }
+
+        async function handleFriendRequest(requestId, senderId, senderName, accept) {
+            try {
+                const requestDocRef = doc(db, "artifacts", appId, "public", "data", "friend_requests", requestId);
+                
+                if (accept) {
+                    // Add to current user's friend list
+                    const myFriendRef = doc(db, "artifacts", appId, "users", currentUser.uid, "friends", senderId);
+                    await setDoc(myFriendRef, { uid: senderId, name: senderName, unreadCount: 0 });
+                    
+                    // Add to sender's friend list
+                    const senderFriendRef = doc(db, "artifacts", appId, "users", senderId, "friends", currentUser.uid);
+                    await setDoc(senderFriendRef, { uid: currentUser.uid, name: currentUser.displayName, unreadCount: 0 });
+                }
+                
+                await deleteDoc(requestDocRef); // Delete the request regardless of acceptance
+                showMessageModal(accept ? `You are now friends with ${senderName}!` : `Friend request from ${senderName} rejected.`);
+            } catch (error) {
+                console.error("Error handling friend request:", error);
+                showMessageModal("Failed to handle friend request. Please try again.");
+            }
+        }
+
+
+        function startFriendsListener() {
+            if (!currentUser) return;
+            const friendsRef = collection(db, "artifacts", appId, "users", currentUser.uid, "friends");
+            const q = query(friendsRef);
+
+            if (unsubscribeFromFriends) unsubscribeFromFriends();
+
+            unsubscribeFromFriends = onSnapshot(q, async (snapshot) => {
+                friendsListEl.innerHTML = '';
+                const friends = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                if (friends.length === 0) {
+                    friendsListEl.innerHTML = '<p class="text-center text-gray-500 mt-4">No friends yet. Search for users to add!</p>';
+                    return;
+                }
+                
+                // Fetch public profile info for friends to display name and photo
+                const friendPromises = friends.map(async friend => {
+                    const publicUserRef = doc(db, "artifacts", appId, "public", "data", "users", friend.uid);
+                    const publicUserSnap = await getDoc(publicUserRef);
+                    return { ...friend, publicData: publicUserSnap.data() };
+                });
+                const friendsWithPublicData = await Promise.all(friendPromises);
+
+                friendsWithPublicData.forEach(friendData => {
+                    renderFriendItem(friendData);
+                });
+
+            }, (error) => {
+                console.error("Error listening to friends:", error);
+            });
+        }
+
+        async function removeFriend() {
+            if (!currentFriend) return;
+            try {
+                // Remove friend from current user's friend list.
+                const myFriendRef = doc(db, "artifacts", appId, "users", currentUser.uid, "friends", currentFriend.uid);
+                await deleteDoc(myFriendRef);
+
+                // IMPORTANT: We cannot directly delete from another user's private data due to security rules.
+                // The removal is only from the current user's list.
+                
+                showMessageModal(`${currentFriend.publicData.name} has been removed from your friends.`);
+                currentFriend = null;
+                friendNameEl.textContent = 'Select a Friend';
+                chatMessagesEl.innerHTML = '';
+            } catch (error) {
+                console.error("Error removing friend:", error);
+                showMessageModal("Failed to remove friend. Please try again.");
+            }
+        }
+        
+        // --- 3. REAL-TIME CHAT LOGIC ---
+        function getChatId(user1Id, user2Id) {
+            return [user1Id, user2Id].sort().join('_');
+        }
+
+        function startChatListener(friend) {
+            if (!currentUser || !friend) return;
+            
+            const chatId = getChatId(currentUser.uid, friend.uid);
+            const messagesRef = collection(db, "artifacts", appId, "private_chats", chatId, "messages");
+            const q = query(messagesRef);
+
+            if (unsubscribeFromChat) {
+                unsubscribeFromChat();
+            }
+
+            unsubscribeFromChat = onSnapshot(q, (snapshot) => {
+                chatMessagesEl.innerHTML = '';
+                const messages = [];
+                snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+                
+                // Client-side sorting by timestamp
+                messages.sort((a, b) => a.timestamp.toDate() - b.timestamp.toDate());
+                
+                messages.forEach(message => {
+                    renderMessage(message);
+                });
+                
+                // Mark messages as seen when the user opens the chat
+                messages.forEach(message => {
+                    if (message.senderId !== currentUser.uid && (!message.readBy || !message.readBy.includes(currentUser.uid))) {
+                        markMessageAsRead(message.id, chatId);
+                    }
+                });
+
+                chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+            }, (error) => {
+                console.error("Error listening to chat messages:", error);
+            });
+        }
+
+        async function markMessageAsRead(messageId, chatId) {
+            const messageRef = doc(db, "artifacts", appId, "private_chats", chatId, "messages", messageId);
+            try {
+                const messageSnap = await getDoc(messageRef);
+                const messageData = messageSnap.data();
+                const readBy = messageData.readBy || [];
+                if (!readBy.includes(currentUser.uid)) {
+                    readBy.push(currentUser.uid);
+                    await updateDoc(messageRef, { readBy: readBy });
+                }
+            } catch (error) {
+                console.error("Error marking message as read:", error);
+            }
+        }
+        
+        // --- 4. NAME & PHOTO UPLOAD LOGIC ---
+        async function updateUserName(newName) {
+            if (!currentUser || !newName) return;
+            try {
+                await updateProfile(currentUser, { displayName: newName });
+                
+                const userRef = doc(db, "artifacts", appId, "public", "data", "users", currentUser.uid);
+                await updateDoc(userRef, { name: newName });
+                
+                profileNameEl.textContent = newName;
+                showMessageModal("Your name has been updated successfully!");
+                
+            } catch (error) {
+                console.error("Error updating user name:", error);
+                showMessageModal("Failed to update name. Please try again.");
+            }
+        }
+
+        async function uploadProfilePicture(file) {
+            if (!currentUser || !file) return;
+            profilePicLoader.classList.remove('hidden');
+
+            try {
+                const storageRef = ref(storage, `profile_photos/${currentUser.uid}/${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+
+                // Update both Firebase Auth and Firestore with the new photo URL
+                await updateProfile(currentUser, { photoURL: downloadURL });
+                const userRef = doc(db, "artifacts", appId, "public", "data", "users", currentUser.uid);
+                await updateDoc(userRef, { photoURL: downloadURL });
+
+                profilePicEl.src = downloadURL;
+                showMessageModal("Profile picture updated successfully!");
+            } catch (error) {
+                console.error("Error uploading profile picture:", error);
+                showMessageModal("Failed to upload profile picture. Please try again.");
+            } finally {
+                profilePicLoader.classList.add('hidden');
+            }
+        }
+
+        // --- 5. UI RENDERING AND EVENT LISTENERS ---
+        function renderFriendItem(friend) {
+            const friendItem = document.createElement('div');
+            friendItem.className = 'friend-item p-4 rounded-xl flex items-center space-x-4 cursor-pointer hover:bg-gray-100 transition-colors duration-200';
+            friendItem.setAttribute('data-uid', friend.uid);
+
+            const profilePhoto = friend.publicData?.photoURL || `https://placehold.co/100x100/cbd5e1/475569?text=${friend.publicData?.name?.charAt(0) || '?'}`;
+            const unreadCount = friend.unreadCount || 0;
+
+            let badgeHtml = '';
+            if (unreadCount > 0) {
+                badgeHtml = `<span class="bg-indigo-500 text-white text-xs font-bold px-2 py-1 rounded-full absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2">${unreadCount}</span>`;
+            }
+
+            friendItem.innerHTML = `
+                <div class="relative">
+                    <img src="${profilePhoto}" alt="Profile" class="w-12 h-12 rounded-full border-2 border-gray-300">
+                    ${badgeHtml}
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-gray-800">${friend.publicData.name}</h3>
+                    <p class="text-sm text-gray-500">${friend.uid}</p>
+                </div>
+            `;
+            friendsListEl.appendChild(friendItem);
+
+            friendItem.addEventListener('click', () => {
+                currentFriend = friend;
+                friendNameEl.textContent = friend.publicData.name;
+                friendStatusEl.textContent = 'Online'; // Placeholder
+                document.getElementById('friend-profile-pic').src = profilePhoto;
+                chatMessagesEl.innerHTML = ''; // Clear old messages
+                removeFriendBtn.classList.remove('hidden');
+                startChatListener(friend);
+            });
+        }
+
+        function renderFriendRequest(request) {
+            const requestItem = document.createElement('div');
+            requestItem.className = 'flex items-center justify-between p-2 rounded-lg bg-gray-100';
+            // Added check for request.senderName to prevent `charAt` error
+            const initial = request.senderName ? request.senderName.charAt(0) : '?';
+            requestItem.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <img src="https://placehold.co/100x100/cbd5e1/475569?text=${initial}" alt="Profile" class="w-8 h-8 rounded-full">
+                    <span class="text-sm font-semibold text-gray-800">${request.senderName}</span>
+                </div>
+                <div class="space-x-1">
+                    <button class="accept-request-btn text-green-500 hover:text-green-700 transition-colors duration-200" data-request-id="${request.id}" data-sender-id="${request.senderId}" data-sender-name="${request.senderName}">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="reject-request-btn text-red-500 hover:text-red-700 transition-colors duration-200" data-request-id="${request.id}" data-sender-id="${request.senderId}" data-sender-name="${request.senderName}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            friendRequestsList.appendChild(requestItem);
+        }
+
+        function renderMessage(message) {
+            const messageEl = document.createElement('div');
+            const isSentByMe = message.senderId === currentUser.uid;
+            messageEl.className = `p-3 rounded-lg max-w-xs md:max-w-md shadow-md transition-all duration-300 ${isSentByMe ? 'message-sent ml-auto' : 'message-received mr-auto'}`;
+
+            let messageContentHtml = '';
+            if (message.type === 'text') {
+                messageContentHtml = `<div class="mt-1">${message.text}</div>`;
+            } else if (message.type === 'image') {
+                messageContentHtml = `<div class="mt-1"><img src="${message.url}" alt="Attachment" class="max-w-full h-auto rounded-lg"></div>`;
+            }
+
+            const seenStatusHtml = isSentByMe && message.readBy && message.readBy.includes(currentFriend.uid) 
+                ? `<span class="text-xs text-gray-500 ml-2"><i class="fas fa-check-double text-blue-500"></i> Seen</span>` 
+                : '';
+
+            messageEl.innerHTML = `
+                <div class="text-sm font-semibold">${isSentByMe ? 'You' : friendNameEl.textContent}</div>
+                ${messageContentHtml}
+                <div class="text-xs text-right text-gray-500 mt-1 flex justify-end items-center">
+                    ${new Date(message.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    ${seenStatusHtml}
+                </div>
+            `;
+            chatMessagesEl.appendChild(messageEl);
+        }
+
+        // --- 6. EVENT LISTENERS ---
+        getStartedBtn.addEventListener('click', () => {
+            showView('auth-view');
+        });
+
+        toggleAuthBtn.addEventListener('click', () => {
+            isSigningUp = !isSigningUp;
+            authTitle.textContent = isSigningUp ? 'Sign Up' : 'Sign In';
+            authSubmitBtn.textContent = isSigningUp ? 'Sign Up' : 'Sign In';
+            toggleAuthBtn.textContent = isSigningUp ? 'Already have an account? Sign In' : 'New user? Sign Up';
+        });
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = authEmailInput.value;
+            const password = authPasswordInput.value;
+
+            try {
+                if (isSigningUp) {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                if (error.code === 'auth/operation-not-allowed') {
+                    showMessageModal("Authentication failed: 'Email/Password' login is not enabled. Please enable it in your Firebase project console under Authentication -> Sign-in method.");
+                } else if (error.code === 'auth/invalid-credential') {
+                    showMessageModal("Sign-in failed. Please check your email and password, or switch to 'Sign Up' to create a new account.");
+                } else {
+                    showMessageModal(`Authentication Failed: ${error.message}`);
+                }
+            }
+        });
+
+        signOutBtn.addEventListener('click', () => {
+            signOut(auth);
+        });
+        
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageText = messageInput.value.trim();
+            const imageFile = imageInput.files[0];
+            
+            if (!currentUser || !currentFriend) {
+                showMessageModal("Please select a friend to chat with.");
+                return;
+            }
+
+            if (!messageText && !imageFile) {
+                return; // Do nothing if no text or image is provided
+            }
+            
+            const chatId = getChatId(currentUser.uid, currentFriend.uid);
+            const messagesRef = collection(db, "artifacts", appId, "private_chats", chatId, "messages");
+            let message = {};
+
+            if (imageFile) {
+                // Upload image to Firebase Storage
+                try {
+                    const storageRef = ref(storage, `chat_images/${chatId}/${Date.now()}-${imageFile.name}`);
+                    const snapshot = await uploadBytes(storageRef, imageFile);
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+                    
+                    message = {
+                        senderId: currentUser.uid,
+                        receiverId: currentFriend.uid,
+                        type: 'image',
+                        url: downloadURL,
+                        text: messageText, // Can include a caption
+                        timestamp: new Date(),
+                        readBy: [currentUser.uid],
+                    };
+                } catch (error) {
+                    console.error("Error uploading image:", error);
+                    showMessageModal("Failed to upload image. Please try again.");
+                    return;
+                }
+            } else {
+                message = {
+                    senderId: currentUser.uid,
+                    receiverId: currentFriend.uid,
+                    type: 'text',
+                    text: messageText,
+                    timestamp: new Date(),
+                    readBy: [currentUser.uid],
+                };
+            }
+
+            try {
+                await addDoc(messagesRef, message);
+                messageInput.value = '';
+                imageInput.value = '';
+            } catch (error) {
+                console.error("Error sending message:", error);
+                showMessageModal("Failed to send message.");
+            }
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            searchUsers(e.target.value);
+        });
+
+        searchResultsEl.addEventListener('click', (e) => {
+            const addBtn = e.target.closest('.add-friend-btn');
+            if (addBtn) {
+                const uid = addBtn.getAttribute('data-uid');
+                const name = addBtn.getAttribute('data-name');
+                sendFriendRequest(uid, name);
+            }
+        });
+
+        friendRequestsList.addEventListener('click', (e) => {
+            const acceptBtn = e.target.closest('.accept-request-btn');
+            const rejectBtn = e.target.closest('.reject-request-btn');
+            
+            if (acceptBtn) {
+                const requestId = acceptBtn.getAttribute('data-request-id');
+                const senderId = acceptBtn.getAttribute('data-sender-id');
+                const senderName = acceptBtn.getAttribute('data-sender-name');
+                handleFriendRequest(requestId, senderId, senderName, true);
+            } else if (rejectBtn) {
+                const requestId = rejectBtn.getAttribute('data-request-id');
+                const senderId = rejectBtn.getAttribute('data-sender-id');
+                const senderName = rejectBtn.getAttribute('data-sender-name');
+                handleFriendRequest(requestId, senderId, senderName, false);
+            }
+        });
+
+        removeFriendBtn.addEventListener('click', removeFriend);
+        
+        modalCloseBtn.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+        });
+
+        editNameBtn.addEventListener('click', () => {
+            newNameInput.value = currentUser.displayName || '';
+            nameModal.classList.remove('hidden');
+        });
+
+        nameModalCancelBtn.addEventListener('click', () => {
+            nameModal.classList.add('hidden');
+        });
+        
+        nameForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newName = newNameInput.value.trim();
+            if (newName) {
+                await updateUserName(newName);
+                nameModal.classList.add('hidden');
+            }
+        });
+
+        profilePicEl.addEventListener('click', () => {
+            profilePicInput.click();
+        });
+
+        profilePicInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                uploadProfilePicture(file);
+            }
+        });
+
+        // The single source of truth for auth state and view changes
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // User is signed in
+                currentUser = user;
+                await ensureUserDocExists(user);
+                profileNameEl.textContent = user.displayName || 'Guest User';
+                profileUidEl.textContent = `ID: ${user.uid}`;
+                profilePicEl.src = user.photoURL || `https://placehold.co/100x100/e2e8f0/64748b?text=${user.displayName?.charAt(0) || 'P'}`;
+                showView('main-app-view');
+                startFriendsListener();
+                startFriendRequestsListener();
+
+                // Show success message only when a new user signs in for the first time
+                if (authForm.dataset.lastAction === 'signIn' || authForm.dataset.lastAction === 'signUp') {
+                    showMessageModal("Successfully signed in!");
+                    authForm.dataset.lastAction = '';
+                }
+
+            } else {
+                // User is signed out
+                currentUser = null;
+                showView('auth-view');
+                if (unsubscribeFromChat) unsubscribeFromChat();
+                if (unsubscribeFromFriends) unsubscribeFromFriends();
+                if (unsubscribeFromRequests) unsubscribeFromRequests();
+            }
+        });
+
+        // Add a listener to the form to track the last action
+        authForm.addEventListener('submit', (e) => {
+            authForm.dataset.lastAction = isSigningUp ? 'signUp' : 'signIn';
+        });
+
+    </script>
+</body>
+</html>
